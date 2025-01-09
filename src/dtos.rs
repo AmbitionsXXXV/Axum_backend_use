@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use core::str;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -52,21 +52,28 @@ pub struct FilterUserDto {
     pub role: String,
     pub verified: bool,
     #[serde(rename = "createdAt")]
-    pub created_at: DateTime<Utc>,
+    pub created_at: DateTime<FixedOffset>,
     #[serde(rename = "updatedAt")]
-    pub updated_at: DateTime<Utc>,
+    pub updated_at: DateTime<FixedOffset>,
 }
 
 impl FilterUserDto {
     pub fn filter_user(user: &User) -> Self {
+        // -- 创建东八区时区对象
+        let china_timezone = FixedOffset::east_opt(8 * 3600).unwrap();
+
+        // -- 转换时间到东八区
+        let created_at = user.created_at.unwrap().with_timezone(&china_timezone);
+        let updated_at = user.updated_at.unwrap().with_timezone(&china_timezone);
+
         FilterUserDto {
             id: user.id.to_string(),
             name: user.name.to_owned(),
             email: user.email.to_owned(),
             verified: user.verified,
             role: user.role.to_str().to_string(),
-            created_at: user.created_at.unwrap(),
-            updated_at: user.updated_at.unwrap(),
+            created_at,
+            updated_at,
         }
     }
 

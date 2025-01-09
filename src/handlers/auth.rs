@@ -8,7 +8,7 @@ use axum::{
     Extension, Json, Router,
 };
 use axum_extra::extract::cookie::Cookie;
-use chrono::{Duration, Utc};
+use chrono::{Duration, FixedOffset, Utc};
 use validator::Validate;
 
 use crate::{
@@ -54,7 +54,12 @@ pub async fn register(
 
     // -- 生成验证令牌和过期时间
     let verification_token = uuid::Uuid::new_v4().to_string();
-    let expires_at = Utc::now() + Duration::hours(24);
+    // -- 使用东八区时间
+    let china_timezone = FixedOffset::east_opt(8 * 3600).unwrap();
+    let expires_at = Utc::now()
+        .with_timezone(&china_timezone)
+        .with_timezone(&Utc)
+        + chrono::Duration::hours(24);
 
     // -- 对密码进行哈希处理
     let hash_password =
