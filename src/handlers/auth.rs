@@ -32,19 +32,35 @@ pub fn auth_handler() -> Router {
         .route("/reset-password", post(reset_password))
 }
 
+/// 处理用户注册请求 -- 创建新用户并发送验证邮件
+///
+/// # 参数
+/// - `app_state` -- 应用程序状态，包含数据库连接等共享资源
+/// - `body` -- 用户注册请求体，包含用户名、邮箱和密码
+///
+/// # 返回
+/// - `Ok(Response)` -- 注册成功，返回成功消息
+/// - `Err(HttpError)` -- 注册失败，返回错误信息
+///   - `BadRequest` -- 请求参数验证失败
+///   - `UniqueViolation` -- 邮箱已存在
+///   - `ServerError` -- 服务器内部错误
 pub async fn register(
     Extension(app_state): Extension<Arc<AppState>>,
     Json(body): Json<RegisterUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
+    // -- 验证请求参数
     body.validate()
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
+    // -- 生成验证令牌和过期时间
     let verification_token = uuid::Uuid::new_v4().to_string();
     let expires_at = Utc::now() + Duration::hours(24);
 
+    // -- 对密码进行哈希处理
     let hash_password =
         password::hash(&body.password).map_err(|e| HttpError::server_error(e.to_string()))?;
 
+    // -- 保存用户信息到数据库
     let result = app_state
         .db_client
         .save_user(
@@ -58,13 +74,17 @@ pub async fn register(
 
     match result {
         Ok(_user) => {
-            let send_email_result =
-                send_verification_email(&body.email, &body.name, &verification_token).await;
+            // -- 异步发送验证邮件
+            let email = body.email.clone();
+            let name = body.name.clone();
+            let token = verification_token.clone();
+            tokio::spawn(async move {
+                if let Err(e) = send_verification_email(&email, &name, &token).await {
+                    eprintln!("Failed to send verification email: {}", e);
+                }
+            });
 
-            if let Err(e) = send_email_result {
-                eprintln!("Failed to send verification email: {}", e);
-            }
-
+            // -- 返回注册成功响应
             Ok((
                 StatusCode::CREATED,
                 Json(Response {
@@ -75,19 +95,37 @@ pub async fn register(
                 }),
             ))
         }
+        // -- 处理数据库错误
         Err(sqlx::Error::Database(db_err)) => {
+            // -- 处理唯一约束违反（邮箱已存在）
             if db_err.is_unique_violation() {
                 Err(HttpError::unique_constraint_violation(
                     ErrorMessage::EmailExist.to_string(),
                 ))
             } else {
+                // -- 处理其他数据库错误
                 Err(HttpError::server_error(db_err.to_string()))
             }
         }
+        // -- 处理其他错误
         Err(e) => Err(HttpError::server_error(e.to_string())),
     }
 }
 
+/// 处理用户登录请求 -- 验证用户身份并生成访问令牌
+///
+/// # 参数
+/// - `app_state` -- 应用程序状态，包含数据库连接等共享资源
+/// - `body` -- 登录请求体，包含邮箱和密码
+///
+/// # 返回
+/// - `Ok(Response)` -- 登录成功，返回访问令牌和用户信息
+/// - `Err(HttpError)` -- 登录失败，返回错误信息
+///   - `BadRequest` -- 请求参数验证失败
+///   - `Unauthorized` -- 邮箱或密码错误
+///   - `ServerError` -- 服务器内部错误
+///   - `NotFound` -- 用户未找到
+///   - `Forbidden` -- 账户未验证
 pub async fn login(
     Extension(app_state): Extension<Arc<AppState>>,
     Json(body): Json<LoginUserDto>,

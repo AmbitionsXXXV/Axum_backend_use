@@ -3,20 +3,20 @@ use chrono::{DateTime, Utc};
 use sqlx::Error;
 use uuid::Uuid;
 
-use crate::models::{User, UserRole};
 use super::DBClient;
+use crate::models::{User, UserRole};
 
 /// 用户数据库操作扩展特征 -- 定义了所有与用户相关的数据库操作
 #[async_trait]
 pub trait UserExt {
     /// 获取用户信息 -- 支持通过多种方式查询
-    /// 
+    ///
     /// # 参数
     /// - `user_id` -- 用户ID
     /// - `name` -- 用户名
     /// - `email` -- 用户邮箱
     /// - `token` -- 验证令牌
-    /// 
+    ///
     /// # 返回
     /// - `Ok(Some(User))` -- 查找到用户
     /// - `Ok(None)` -- 未找到用户
@@ -30,18 +30,14 @@ pub trait UserExt {
     ) -> Result<Option<User>, Error>;
 
     /// 分页获取用户列表 -- 按创建时间倒序排列
-    /// 
+    ///
     /// # 参数
     /// - `page` -- 页码，从1开始
     /// - `limit` -- 每页数量
-    async fn get_users(
-        &self,
-        page: u32,
-        limit: usize,
-    ) -> Result<Vec<User>, Error>;
+    async fn get_users(&self, page: u32, limit: usize) -> Result<Vec<User>, Error>;
 
     /// 保存新用户 -- 创建新的用户记录
-    /// 
+    ///
     /// # 参数
     /// - `name` -- 用户名
     /// - `email` -- 邮箱
@@ -68,24 +64,13 @@ pub trait UserExt {
     ) -> Result<User, Error>;
 
     /// 更新用户角色 -- 修改用户的权限级别
-    async fn update_user_role(
-        &self,
-        user_id: Uuid,
-        role: UserRole,
-    ) -> Result<User, Error>;
+    async fn update_user_role(&self, user_id: Uuid, role: UserRole) -> Result<User, Error>;
 
     /// 更新用户密码 -- 修改用户的登录密码
-    async fn update_user_password(
-        &self,
-        user_id: Uuid,
-        password: String,
-    ) -> Result<User, Error>;
+    async fn update_user_password(&self, user_id: Uuid, password: String) -> Result<User, Error>;
 
     /// 验证用户令牌 -- 确认邮箱验证或重置密码
-    async fn verifed_token(
-        &self,
-        token: &str,
-    ) -> Result<(), Error>;
+    async fn verifed_token(&self, token: &str) -> Result<(), Error>;
 
     /// 添加验证令牌 -- 用于邮箱验证或密码重置
     async fn add_verifed_token(
@@ -136,11 +121,7 @@ impl UserExt for DBClient {
         Ok(user)
     }
 
-    async fn get_users(
-        &self,
-        page: u32,
-        limit: usize,
-    ) -> Result<Vec<User>, Error> {
+    async fn get_users(&self, page: u32, limit: usize) -> Result<Vec<User>, Error> {
         let offset = (page - 1) * limit as u32;
 
         let users = sqlx::query_as!(
@@ -180,11 +161,9 @@ impl UserExt for DBClient {
     }
 
     async fn get_user_count(&self) -> Result<i64, Error> {
-        let count = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) FROM users"#
-        )
-        .fetch_one(self.pool())
-        .await?;
+        let count = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM users"#)
+            .fetch_one(self.pool())
+            .await?;
 
         Ok(count.unwrap_or(0))
     }
@@ -192,7 +171,7 @@ impl UserExt for DBClient {
     async fn update_user_name<T: Into<String> + Send>(
         &self,
         user_id: Uuid,
-        new_name: T
+        new_name: T,
     ) -> Result<User, Error> {
         let user = sqlx::query_as!(
             User,
@@ -210,11 +189,7 @@ impl UserExt for DBClient {
         Ok(user)
     }
 
-    async fn update_user_role(
-        &self,
-        user_id: Uuid,
-        new_role: UserRole
-    ) -> Result<User, Error> {
+    async fn update_user_role(&self, user_id: Uuid, new_role: UserRole) -> Result<User, Error> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -234,7 +209,7 @@ impl UserExt for DBClient {
     async fn update_user_password(
         &self,
         user_id: Uuid,
-        new_password: String
+        new_password: String,
     ) -> Result<User, Error> {
         let user = sqlx::query_as!(
             User,
@@ -252,10 +227,7 @@ impl UserExt for DBClient {
         Ok(user)
     }
 
-    async fn verifed_token(
-        &self,
-        token: &str,
-    ) -> Result<(), Error> {
+    async fn verifed_token(&self, token: &str) -> Result<(), Error> {
         let _ = sqlx::query!(
             r#"
             UPDATE users
@@ -266,7 +238,8 @@ impl UserExt for DBClient {
             WHERE verification_token = $1
             "#,
             token
-        ).execute(self.pool())
+        )
+        .execute(self.pool())
         .await?;
 
         Ok(())
@@ -287,7 +260,8 @@ impl UserExt for DBClient {
             token,
             token_expires_at,
             user_id,
-        ).execute(self.pool())
+        )
+        .execute(self.pool())
         .await?;
 
         Ok(())
