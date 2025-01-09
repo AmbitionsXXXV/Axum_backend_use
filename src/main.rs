@@ -2,14 +2,36 @@
 
 mod config;
 mod db;
+mod dtos;
 mod error;
 mod handlers;
+mod mail;
 mod middleware;
 mod models;
 mod routes;
+mod utils;
 
-use axum::middleware::from_fn;
+use std::sync::Arc;
+
+use axum::{
+    http::{
+        header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
+        HeaderValue, Method,
+    },
+    middleware::from_fn,
+};
+use config::Config;
+use db::DBClient;
 use dotenvy::dotenv;
+use routes::create_router;
+use sqlx::postgres::PgPoolOptions;
+use tower_http::cors::CorsLayer;
+
+#[derive(Debug, Clone)]
+pub struct AppState {
+    pub env: Config,
+    pub db_client: DBClient,
+}
 
 #[tokio::main]
 async fn main() {
@@ -23,15 +45,36 @@ async fn main() {
     let config = config::Config::from_env();
 
     // -- 创建数据库连接池
-    let pool = db::create_pool()
+    let pool = match PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&config.database_url)
         .await
-        .expect("Failed to create database pool");
+    {
+        Ok(pool) => {
+            println!("✅Connection to the database is successful!");
+            pool
+        }
+        Err(err) => {
+            println!("🔥 Failed to connect to the database: {:?}", err);
+            std::process::exit(1);
+        }
+    };
 
-    // -- 创建应用路由
-    let app = routes::create_router(pool).layer(from_fn(middleware::logging_middleware));
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::PUT]);
 
-    // -- 启动服务器
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.server_port))
+    let db_client = DBClient::new(pool);
+    let app_state = AppState {
+        env: config.clone(),
+        db_client,
+    };
+
+    let app = create_router(Arc::new(app_state.clone())).layer(cors.clone());
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &config.server_port))
         .await
         .unwrap();
 
