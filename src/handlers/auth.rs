@@ -14,8 +14,8 @@ use validator::Validate;
 use crate::{
     db::UserExt,
     dtos::{
-        ForgotPasswordRequestDto, LoginUserDto, RegisterUserDto, ResetPasswordRequestDto, Response,
-        UserLoginResponseDto, VerifyEmailQueryDto,
+        ForgotPasswordRequestDto, LoginUserDto, RegisterUserDto, ResendVerificationDto,
+        ResetPasswordRequestDto, Response, UserLoginResponseDto, VerifyEmailQueryDto,
     },
     error::{ErrorMessage, HttpError},
     mail::mails::{send_forgot_password_email, send_verification_email, send_welcome_email},
@@ -28,6 +28,8 @@ pub fn auth_handler() -> Router {
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/verify", get(verify_email))
+        // -- 重新发送验证邮件的端点
+        .route("/resend-verification", post(resend_verification_email))
         .route("/forgot-password", post(forgot_password))
         .route("/reset-password", post(reset_password))
 }
@@ -48,24 +50,37 @@ pub async fn register(
     Extension(app_state): Extension<Arc<AppState>>,
     Json(body): Json<RegisterUserDto>,
 ) -> Result<impl IntoResponse, HttpError> {
-    // -- 验证请求参数
+    // -- 验证请求数据
     body.validate()
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
-    // -- 生成验证令牌和过期时间
-    let verification_token = uuid::Uuid::new_v4().to_string();
-    // -- 使用东八区时间
-    let china_timezone = FixedOffset::east_opt(8 * 3600).unwrap();
-    let expires_at = Utc::now()
-        .with_timezone(&china_timezone)
-        .with_timezone(&Utc)
-        + chrono::Duration::hours(24);
+    // -- 检查邮箱是否已注册
+    let user_exists = app_state
+        .db_client
+        .get_user(None, None, Some(&body.email), None)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    // -- 对密码进行哈希处理
+    if user_exists.is_some() {
+        return Err(HttpError::bad_request("邮箱已被注册".to_string()));
+    }
+
+    // -- 生成验证 token，有效期设置为 30 分钟
+    let verification_token = uuid::Uuid::new_v4().to_string();
+    let token_expires_at = Utc::now() + Duration::minutes(30);
+
+    // -- 打印时间信息以便调试
+    tracing::info!(
+        "生成验证 token，当前时间: {:?}, 过期时间: {:?}",
+        Utc::now(),
+        token_expires_at
+    );
+
+    // -- 加密密码
     let hash_password =
         password::hash(&body.password).map_err(|e| HttpError::server_error(e.to_string()))?;
 
-    // -- 保存用户信息到数据库
+    // -- 保存用户信息
     let result = app_state
         .db_client
         .save_user(
@@ -73,7 +88,7 @@ pub async fn register(
             &body.email,
             &hash_password,
             &verification_token,
-            expires_at,
+            token_expires_at,
         )
         .await;
 
@@ -94,9 +109,7 @@ pub async fn register(
                 StatusCode::CREATED,
                 Json(Response {
                     status: "success",
-                    message:
-                        "Registration successful! Please check your email to verify your account."
-                            .to_string(),
+                    message: "注册成功，请在 30 分钟内完成邮箱验证".to_string(),
                 }),
             ))
         }
@@ -186,14 +199,30 @@ pub async fn login(
     }
 }
 
+/// 处理邮箱验证请求 -- 验证用户的邮箱验证 token
+///
+/// # 验证流程
+/// 1. 验证请求参数格式
+/// 2. 根据 token 查找用户
+/// 3. 检查 token 是否过期
+/// 4. 更新用户验证状态
+///
+/// # 数据库更新操作
+/// 验证成功后，通过 verifed_token 函数执行以下更新：
+/// - verified = true  -- 标记邮箱已验证
+/// - updated_at = Now()  -- 更新时间戳
+/// - verification_token = NULL  -- 清除验证 token
+/// - token_expires_at = NULL  -- 清除过期时间
 pub async fn verify_email(
     Query(query_params): Query<VerifyEmailQueryDto>,
     Extension(app_state): Extension<Arc<AppState>>,
 ) -> Result<impl IntoResponse, HttpError> {
+    // -- 步骤 1: 验证请求参数格式
     query_params
         .validate()
         .map_err(|e| HttpError::bad_request(e.to_string()))?;
 
+    // -- 步骤 2: 根据验证 token 查找用户
     let result = app_state
         .db_client
         .get_user(None, None, None, Some(&query_params.token))
@@ -204,18 +233,30 @@ pub async fn verify_email(
         ErrorMessage::InvalidToken.to_string(),
     ))?;
 
+    // -- 步骤 3: 检查 token 是否过期
     if let Some(expires_at) = user.token_expires_at {
+        // -- 打印时间信息以便调试
+        tracing::info!(
+            "当前时间: {:?}, Token 过期时间: {:?}",
+            Utc::now(),
+            expires_at
+        );
+
         if Utc::now() > expires_at {
             return Err(HttpError::bad_request(
-                "Verification token has expired".to_string(),
-            ))?;
+                "验证链接已过期，请重新发送验证邮件".to_string(),
+            ));
         }
     } else {
-        return Err(HttpError::bad_request(
-            "Invalid verification token".to_string(),
-        ))?;
+        return Err(HttpError::bad_request("验证 token 不存在".to_string()));
     }
 
+    // -- 步骤 4: 更新用户验证状态
+    // 调用 verifed_token 函数执行以下更新：
+    // - verified = true  (标记邮箱已验证)
+    // - updated_at = Now()  (更新时间戳)
+    // - verification_token = NULL  (清除验证 token)
+    // - token_expires_at = NULL  (清除过期时间)
     app_state
         .db_client
         .verifed_token(&query_params.token)
@@ -255,6 +296,64 @@ pub async fn verify_email(
     response.headers_mut().extend(headers);
 
     Ok(response)
+}
+
+pub async fn resend_verification_email(
+    Extension(app_state): Extension<Arc<AppState>>,
+    Json(body): Json<ResendVerificationDto>,
+) -> Result<impl IntoResponse, HttpError> {
+    // -- 验证请求数据
+    body.validate()
+        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+
+    // -- 查找用户
+    let result = app_state
+        .db_client
+        .get_user(None, None, Some(&body.email), None)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    let user = result.ok_or(HttpError::bad_request("邮箱地址未注册".to_string()))?;
+
+    // -- 检查是否已经验证过
+    if user.verified {
+        return Err(HttpError::bad_request("邮箱已经验证过了".to_string()));
+    }
+
+    // -- 生成新的验证 token，有效期设置为 30 分钟
+    let verification_token = uuid::Uuid::new_v4().to_string();
+    let expires_at = Utc::now() + Duration::minutes(30);
+
+    // -- 打印时间信息以便调试
+    tracing::info!(
+        "生成新的验证 token，当前时间: {:?}, 过期时间: {:?}",
+        Utc::now(),
+        expires_at
+    );
+
+    let user_id = uuid::Uuid::parse_str(&user.id.to_string()).unwrap();
+
+    // -- 更新验证 token
+    app_state
+        .db_client
+        .add_verifed_token(user_id, &verification_token, expires_at)
+        .await
+        .map_err(|e| HttpError::server_error(e.to_string()))?;
+
+    // -- 发送验证邮件
+    let email_sent = send_verification_email(&user.email, &user.name, &verification_token).await;
+
+    if let Err(e) = email_sent {
+        eprintln!("发送验证邮件失败: {}", e);
+        return Err(HttpError::server_error("发送邮件失败".to_string()));
+    }
+
+    let response = Response {
+        message: "验证邮件已重新发送，请在 30 分钟内完成验证".to_string(),
+        status: "success",
+    };
+
+    Ok(Json(response))
 }
 
 pub async fn forgot_password(

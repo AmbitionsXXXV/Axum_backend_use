@@ -1,4 +1,4 @@
-use super::sendmail::send_email;
+use crate::{config::Config, mail::sendmail::send_email};
 
 pub async fn send_verification_email(
     to_email: &str,
@@ -7,8 +7,9 @@ pub async fn send_verification_email(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let subject = "Email Verification";
     let template_path = "src/mail/templates/Verification-email.html";
-    let base_url = "http://localhost:8000/api/auth/verify";
-    let verification_link = create_verification_link(base_url, token);
+    let config = Config::from_env();
+    let base_url = format!("http://localhost:{}/api/auth/verify", config.server_port);
+    let verification_link = create_verification_link(&base_url, token);
     let placeholders = vec![
         ("{{username}}".to_string(), username.to_string()),
         ("{{verification_link}}".to_string(), verification_link),

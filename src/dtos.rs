@@ -181,3 +181,9 @@ pub struct ResetPasswordRequestDto {
     )]
     pub new_password_confirm: String,
 }
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct ResendVerificationDto {
+    #[validate(email(message = "Invalid email address"))]
+    pub email: String,
+}

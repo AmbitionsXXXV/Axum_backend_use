@@ -60,19 +60,27 @@ async fn main() {
         }
     };
 
+    // -- 创建一个新的 CORS 中间件层
     let cors = CorsLayer::new()
+        // -- 允许来自 localhost:3000 的跨域请求
         .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+        // -- 允许请求头中包含 认证、 接受类型 和 内容类型 字段
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+        // -- 允许跨域请求中包含 认证信息（如 cookies）
         .allow_credentials(true)
+        // -- 允许使用 GET、 POST 和 PUT 这些 HTTP 请求方法
         .allow_methods([Method::GET, Method::POST, Method::PUT]);
 
+    // -- 初始化数据库客户端连接
     let db_client = DBClient::new(pool);
+    // -- 创建应用程序状态，包含 环境配置 和 数据库客户端
     let app_state = AppState {
         env: config.clone(),
         db_client,
     };
 
-    let app = create_router(Arc::new(app_state.clone())).layer(cors.clone());
+    // -- 使用 Arc 包装 app_state 实现线程安全的共享引用，使多个并发请求可以安全地访问应用状态
+    let app = create_router(Arc::new(app_state.clone())).layer(cors);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", &config.server_port))
         .await
