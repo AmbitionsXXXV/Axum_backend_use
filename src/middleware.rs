@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct JWTAuthMiddeware {
+pub struct JWTAuthMiddleware {
     pub user: User,
 }
 
@@ -71,7 +71,7 @@ pub async fn auth(
         user.ok_or_else(|| HttpError::unauthorized(ErrorMessage::UserNoLongerExist.to_string()))?;
 
     req.extensions_mut()
-        .insert(JWTAuthMiddeware { user: user.clone() });
+        .insert(JWTAuthMiddleware { user: user.clone() });
 
     // -- 通过 Ok 包装异步执行下一个处理器的结果，将请求传递给路由处理函数继续处理
     Ok(next.run(req).await)
@@ -85,7 +85,7 @@ pub async fn role_check(
 ) -> Result<impl IntoResponse, HttpError> {
     let user = req
         .extensions()
-        .get::<JWTAuthMiddeware>()
+        .get::<JWTAuthMiddleware>()
         .ok_or_else(|| HttpError::unauthorized(ErrorMessage::UserNotAuthenticated.to_string()))?;
 
     if !required_roles.contains(&user.user.role) {

@@ -259,7 +259,7 @@ pub async fn verify_email(
     // - token_expires_at = NULL  (清除过期时间)
     app_state
         .db_client
-        .verifed_token(&query_params.token)
+        .verified_token(&query_params.token)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -336,7 +336,7 @@ pub async fn resend_verification_email(
     // -- 更新验证 token
     app_state
         .db_client
-        .add_verifed_token(user_id, &verification_token, expires_at)
+        .add_verified_token(user_id, &verification_token, expires_at)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -378,7 +378,7 @@ pub async fn forgot_password(
 
     app_state
         .db_client
-        .add_verifed_token(user_id, &verification_token, expires_at)
+        .add_verified_token(user_id, &verification_token, expires_at)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -444,7 +444,7 @@ pub async fn reset_password(
 
     app_state
         .db_client
-        .verifed_token(&body.token)
+        .verified_token(&body.token)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 

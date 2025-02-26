@@ -16,7 +16,7 @@ use crate::{
         UserListResponseDto, UserPasswordUpdateDto, UserResponseDto,
     },
     error::{ErrorMessage, HttpError},
-    middleware::{role_check, JWTAuthMiddeware},
+    middleware::{role_check, JWTAuthMiddleware},
     models::UserRole,
     utils::password,
     AppState,
@@ -43,7 +43,7 @@ pub fn users_handler() -> Router {
 
 pub async fn get_me(
     Extension(_app_state): Extension<Arc<AppState>>,
-    Extension(user): Extension<JWTAuthMiddeware>,
+    Extension(user): Extension<JWTAuthMiddleware>,
 ) -> Result<impl IntoResponse, HttpError> {
     let filtered_user = FilterUserDto::filter_user(&user.user);
 
@@ -91,7 +91,7 @@ pub async fn get_users(
 
 pub async fn update_user_name(
     Extension(app_state): Extension<Arc<AppState>>,
-    Extension(user): Extension<JWTAuthMiddeware>,
+    Extension(user): Extension<JWTAuthMiddleware>,
     Json(body): Json<NameUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()
@@ -121,7 +121,7 @@ pub async fn update_user_name(
 
 pub async fn update_user_role(
     Extension(app_state): Extension<Arc<AppState>>,
-    Extension(user): Extension<JWTAuthMiddeware>,
+    Extension(user): Extension<JWTAuthMiddleware>,
     Json(body): Json<RoleUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()
@@ -151,7 +151,7 @@ pub async fn update_user_role(
 
 pub async fn update_user_password(
     Extension(app_state): Extension<Arc<AppState>>,
-    Extension(user): Extension<JWTAuthMiddeware>,
+    Extension(user): Extension<JWTAuthMiddleware>,
     Json(body): Json<UserPasswordUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()

@@ -81,10 +81,10 @@ pub trait UserExt {
     async fn update_user_password(&self, user_id: Uuid, password: String) -> Result<User, Error>;
 
     /// 验证用户令牌 -- 确认邮箱验证或重置密码
-    async fn verifed_token(&self, token: &str) -> Result<(), Error>;
+    async fn verified_token(&self, token: &str) -> Result<(), Error>;
 
     /// 添加验证令牌 -- 用于邮箱验证或密码重置
-    async fn add_verifed_token(
+    async fn add_verified_token(
         &self,
         user_id: Uuid,
         token: &str,
@@ -238,7 +238,7 @@ impl UserExt for DBClient {
         Ok(user)
     }
 
-    async fn verifed_token(&self, token: &str) -> Result<(), Error> {
+    async fn verified_token(&self, token: &str) -> Result<(), Error> {
         let _ = sqlx::query!(
             r#"
             UPDATE users
@@ -256,7 +256,7 @@ impl UserExt for DBClient {
         Ok(())
     }
 
-    async fn add_verifed_token(
+    async fn add_verified_token(
         &self,
         user_id: Uuid,
         token: &str,
