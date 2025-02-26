@@ -208,7 +208,7 @@ pub async fn login(
 /// 4. 更新用户验证状态
 ///
 /// # 数据库更新操作
-/// 验证成功后，通过 verifed_token 函数执行以下更新：
+/// 验证成功后，通过 verified_token 函数执行以下更新：
 /// - verified = true  -- 标记邮箱已验证
 /// - updated_at = Now()  -- 更新时间戳
 /// - verification_token = NULL  -- 清除验证 token
@@ -252,7 +252,7 @@ pub async fn verify_email(
     }
 
     // -- 步骤 4: 更新用户验证状态
-    // 调用 verifed_token 函数执行以下更新：
+    // 调用 verified_token 函数执行以下更新：
     // - verified = true  (标记邮箱已验证)
     // - updated_at = Now()  (更新时间戳)
     // - verification_token = NULL  (清除验证 token)
