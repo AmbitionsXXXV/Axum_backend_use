@@ -26,6 +26,7 @@ use dotenvy::dotenv;
 use routes::create_router;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -37,6 +38,14 @@ pub struct AppState {
 async fn main() {
     // -- 加载环境变量
     dotenv().ok();
+
+    // 设置文件日志
+    let file_appender = RollingFileAppender::new(
+        Rotation::DAILY,
+        "./logs",  // 日志目录
+        "application.log",    // 日志文件名
+    );
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
     // -- 初始化日志
     tracing_subscriber::fmt::init();

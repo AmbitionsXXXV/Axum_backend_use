@@ -54,6 +54,7 @@ pub async fn get_me(
         },
     };
 
+    tracing::info!("成功获取用户信息: {}", user.user.email);
     Ok(Json(response_data))
 }
 
@@ -61,25 +62,31 @@ pub async fn get_users(
     Query(query_params): Query<RequestQueryDto>,
     Extension(app_state): Extension<Arc<AppState>>,
 ) -> Result<impl IntoResponse, HttpError> {
-    query_params
-        .validate()
-        .map_err(|e| HttpError::bad_request(e.to_string()))?;
-
     let page = query_params.page.unwrap_or(1);
     let limit = query_params.limit.unwrap_or(10);
+    
+    tracing::info!("获取用户列表，页码: {}, 每页数量: {}", page, limit);
 
     let users = app_state
         .db_client
         .get_users(page as u32, limit)
         .await
-        .map_err(|e| HttpError::server_error(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("获取用户列表失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
     let user_count = app_state
         .db_client
         .get_user_count()
         .await
-        .map_err(|e| HttpError::server_error(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("获取用户总数失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
+    tracing::info!("成功获取用户列表，总数: {}", user_count);
+    
     let response = UserListResponseDto {
         status: "success".to_string(),
         users: FilterUserDto::filter_users(&users),
@@ -94,18 +101,25 @@ pub async fn update_user_name(
     Extension(user): Extension<JWTAuthMiddleware>,
     Json(body): Json<NameUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
+    tracing::info!("更新用户名，用户ID: {}, 新用户名: {}", user.user.id, body.name);
+    
     body.validate()
-        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+        .map_err(|e| {
+            tracing::warn!("用户名验证失败: {}", e);
+            HttpError::bad_request(e.to_string())
+        })?;
 
     let user = &user.user;
-
     let user_id = uuid::Uuid::parse_str(&user.id.to_string()).unwrap();
 
     let result = app_state
         .db_client
         .update_user_name(user_id, &body.name)
         .await
-        .map_err(|e| HttpError::server_error(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("更新用户名失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
     let filtered_user = FilterUserDto::filter_user(&result);
 
@@ -125,17 +139,31 @@ pub async fn update_user_role(
     Json(body): Json<RoleUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
     body.validate()
-        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+        .map_err(|e| {
+            tracing::warn!("角色更新请求验证失败: {}", e);
+            HttpError::bad_request(e.to_string())
+        })?;
 
-    let user = &user.user;
+    if user.user.role != UserRole::Admin {
+        tracing::warn!(
+            "权限不足，用户: {} 尝试更新角色但不是管理员",
+            user.user.email
+        );
+        return Err(HttpError::unauthorized(
+            ErrorMessage::PermissionDenied.to_string(),
+        ));
+    }
 
-    let user_id = uuid::Uuid::parse_str(&user.id.to_string()).unwrap();
+    let user_id = uuid::Uuid::parse_str(&user.user.id.to_string()).unwrap();
 
     let result = app_state
         .db_client
         .update_user_role(user_id, body.role)
         .await
-        .map_err(|e| HttpError::server_error(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("更新用户角色失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
     let filtered_user = FilterUserDto::filter_user(&result);
 
@@ -154,11 +182,15 @@ pub async fn update_user_password(
     Extension(user): Extension<JWTAuthMiddleware>,
     Json(body): Json<UserPasswordUpdateDto>,
 ) -> Result<impl IntoResponse, HttpError> {
+    tracing::info!("更新用户密码，用户ID: {}", user.user.id);
+    
     body.validate()
-        .map_err(|e| HttpError::bad_request(e.to_string()))?;
+        .map_err(|e| {
+            tracing::warn!("密码更新请求验证失败: {}", e);
+            HttpError::bad_request(e.to_string())
+        })?;
 
     let user = &user.user;
-
     let user_id = uuid::Uuid::parse_str(&user.id.to_string()).unwrap();
 
     let result = app_state
@@ -175,20 +207,29 @@ pub async fn update_user_password(
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
     if !password_match {
+        tracing::warn!("当前密码不匹配，用户ID: {}", user.id);
         return Err(HttpError::bad_request(
-            "Old password is incorrect".to_string(),
+            ErrorMessage::WrongCredentials.to_string(),
         ));
     }
 
-    let hash_password =
-        password::hash(&body.new_password).map_err(|e| HttpError::server_error(e.to_string()))?;
+    let hash_password = password::hash(&body.new_password)
+        .map_err(|e| {
+            tracing::error!("密码加密失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
     app_state
         .db_client
         .update_user_password(user_id, hash_password)
         .await
-        .map_err(|e| HttpError::server_error(e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("更新密码失败: {}", e);
+            HttpError::server_error(e.to_string())
+        })?;
 
+    tracing::info!("密码更新成功，用户ID: {}", user.id);
+    
     let response = Response {
         message: "Password updated Successfully".to_string(),
         status: "success",
