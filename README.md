@@ -30,16 +30,22 @@
 ## 快速开始
 
 1. 克隆项目
+
 ```bash
 git clone <repository-url>
 cd axum_back
 ```
 
 2. 配置环境变量
+
 ```bash
 cp .env.example .env
 ```
+
 编辑 `.env` 文件，设置以下环境变量：
+
+SMTP 邮箱配置参考：[SMTP 邮箱配置](https://www.cnblogs.com/jiyuwu/p/16313476.html)
+
 ```env
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/axum_db
 JWT_SECRET_KEY=your-secret-key
@@ -52,17 +58,20 @@ SMTP_PORT=587
 ```
 
 3. 启动数据库
+
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-4. 运行数据库迁移
+1. 运行数据库迁移
+
 ```bash
 sqlx database create
 sqlx migrate run
 ```
 
-5. 启动服务
+1. 启动服务
+
 ```bash
 cargo run
 ```
@@ -72,8 +81,10 @@ cargo run
 ### 认证相关
 
 #### 用户注册
+
 - 路径: `POST /api/auth/register`
 - 请求体:
+
 ```json
 {
     "name": "用户名",
@@ -84,8 +95,10 @@ cargo run
 ```
 
 #### 用户登录
+
 - 路径: `POST /api/auth/login`
 - 请求体:
+
 ```json
 {
     "email": "email@example.com",
@@ -94,11 +107,14 @@ cargo run
 ```
 
 #### 邮箱验证
+
 - 路径: `GET /api/auth/verify?token=verification_token`
 
 #### 忘记密码
+
 - 路径: `POST /api/auth/forgot-password`
 - 请求体:
+
 ```json
 {
     "email": "email@example.com"
@@ -106,8 +122,10 @@ cargo run
 ```
 
 #### 重置密码
+
 - 路径: `POST /api/auth/reset-password`
 - 请求体:
+
 ```json
 {
     "token": "reset_token",
@@ -118,11 +136,14 @@ cargo run
 ### 用户管理
 
 #### 获取用户列表（需要管理员权限）
+
 - 路径: `GET /api/users?page=1&limit=10`
 
 #### 更新用户角色（需要管理员权限）
+
 - 路径: `PATCH /api/users/{user_id}/role`
 - 请求体:
+
 ```json
 {
     "role": "admin"
@@ -132,7 +153,8 @@ cargo run
 ## 开发指南
 
 ### 项目结构
-```
+
+```bash
 src/
 ├── config/         -- 配置管理
 ├── db/            -- 数据库操作
@@ -157,6 +179,7 @@ src/
 ## 测试
 
 运行所有测试：
+
 ```bash
 cargo test
 ```
@@ -164,13 +187,15 @@ cargo test
 ## 部署
 
 1. 构建发布版本：
+
 ```bash
 cargo build --release
 ```
 
 2. 使用 Docker 部署：
+
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ## 贡献指南

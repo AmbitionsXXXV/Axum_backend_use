@@ -3,7 +3,7 @@ use lettre::{
     transport::smtp::authentication::Credentials,
     Message, SmtpTransport, Transport,
 };
-use std::{env, fs};
+use std::{env, fs, time::Duration};
 
 pub async fn send_email(
     to_email: &str,
@@ -36,14 +36,15 @@ pub async fn send_email(
     let creds = Credentials::new(smtp_username.clone(), smtp_password.clone());
     let mailer = SmtpTransport::starttls_relay(&smtp_server)?
         .credentials(creds)
+        .timeout(Some(Duration::from_secs(30)))
         .port(smtp_port)
         .build();
 
     let result = mailer.send(&email);
 
     match result {
-        Ok(_) => println!("Email sent successfully!"),
-        Err(e) => println!("Failed to send email: {:?}", e),
+        Ok(_) => println!("Email sent successfully to: {}", to_email),
+        Err(e) => println!("Failed to send email to {}: {:?}", to_email, e),
     }
 
     Ok(())

@@ -1,7 +1,11 @@
 {
   "cSpell.words": [
+    "bitnami",
+    "creds",
     "dtos",
     "lettre",
-    "maxage"
+    "maxage",
+    "singlepart",
+    "starttls"
   ]
 }
