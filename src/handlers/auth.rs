@@ -167,7 +167,7 @@ pub async fn login(
     if password_matched {
         let token = token::create_token(
             &user.id.to_string(),
-            &app_state.env.jwt_secret.as_bytes(),
+            app_state.env.jwt_secret.as_bytes(),
             app_state.env.jwt_maxage,
         )
         .map_err(|e| HttpError::server_error(e.to_string()))?;
@@ -287,9 +287,7 @@ pub async fn verify_email(
 
     headers.append(header::SET_COOKIE, cookie.to_string().parse().unwrap());
 
-    let frontend_url = format!("http://localhost:5173/settings");
-
-    let redirect = Redirect::to(&frontend_url);
+    let redirect = Redirect::to(&app_state.env.frontend_url);
 
     let mut response = redirect.into_response();
 
@@ -383,7 +381,8 @@ pub async fn forgot_password(
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
     let reset_link = format!(
-        "http://localhost:5173/reset-password?token={}",
+        "{}/reset-password?token={}",
+        &app_state.env.frontend_url,
         &verification_token
     );
 

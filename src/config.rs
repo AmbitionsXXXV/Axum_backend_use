@@ -7,6 +7,7 @@ pub struct Config {
     pub server_port: u16,
     pub jwt_secret: String,
     pub jwt_maxage: i64,
+    pub frontend_url: String,
 }
 
 impl Config {
@@ -28,11 +29,15 @@ impl Config {
             .parse()
             .expect("SERVER_PORT must be a valid number");
 
+        let frontend_url = env::var("FRONTEND_URL")
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+
         Self {
             jwt_secret,
             jwt_maxage,
             database_url,
             server_port,
+            frontend_url,
         }
     }
 }
