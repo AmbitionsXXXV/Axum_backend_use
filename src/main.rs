@@ -26,7 +26,7 @@ use dotenvy::dotenv;
 use routes::create_router;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use utils::init_production_logging;
 
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -39,19 +39,11 @@ async fn main() {
     // -- 加载环境变量
     dotenv().ok();
 
-    // 设置文件日志
-    let file_appender = RollingFileAppender::new(
-        Rotation::DAILY,
-        "./logs",  // 日志目录
-        "application.log",    // 日志文件名
-    );
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    // -- 初始化日志
-    tracing_subscriber::fmt::init();
-
     // -- 加载配置
     let config = config::Config::from_env();
+
+    // -- 初始化日志系统，使用配置中的日志目录和保留天数
+    init_production_logging(Some(&config.log_dir), Some(config.log_retention_days)).await;
 
     // -- 创建数据库连接池
     let pool = match PgPoolOptions::new()
@@ -60,19 +52,19 @@ async fn main() {
         .await
     {
         Ok(pool) => {
-            println!("✅ Connection to the database is successful!");
+            tracing::info!("✅ Connection to the database is successful!");
             pool
         }
         Err(err) => {
-            println!("🔥 Failed to connect to the database: {:?}", err);
+            tracing::error!("🔥 Failed to connect to the database: {:?}", err);
             std::process::exit(1);
         }
     };
 
     // -- 创建一个新的 CORS 中间件层
     let cors = CorsLayer::new()
-        // -- 允许来自 localhost:3000 的跨域请求
-        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
+        // -- 允许来自前端 URL 的跨域请求
+        .allow_origin(config.frontend_url.parse::<HeaderValue>().unwrap())
         // -- 允许请求头中包含 认证、 接受类型 和 内容类型 字段
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
         // -- 允许跨域请求中包含 认证信息（如 cookies）
