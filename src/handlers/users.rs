@@ -103,7 +103,7 @@ pub async fn update_user_name(
 
     let result = app_state
         .db_client
-        .update_user_name(user_id.clone(), &body.name)
+        .update_user_name(user_id, &body.name)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -133,7 +133,7 @@ pub async fn update_user_role(
 
     let result = app_state
         .db_client
-        .update_user_role(user_id.clone(), body.role)
+        .update_user_role(user_id, body.role)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -163,7 +163,7 @@ pub async fn update_user_password(
 
     let result = app_state
         .db_client
-        .get_user(Some(user_id.clone()), None, None, None)
+        .get_user(Some(user_id), None, None, None)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 
@@ -185,7 +185,7 @@ pub async fn update_user_password(
 
     app_state
         .db_client
-        .update_user_password(user_id.clone(), hash_password)
+        .update_user_password(user_id, hash_password)
         .await
         .map_err(|e| HttpError::server_error(e.to_string()))?;
 

@@ -9,7 +9,7 @@ pub enum UserRole {
 }
 
 impl UserRole {
-    pub fn to_str(&self) -> &str {
+    pub fn to_str(self) -> &'static str {
         match self {
             UserRole::Admin => "admin",
             UserRole::User => "user",
